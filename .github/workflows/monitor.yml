@@ -1,0 +1,44 @@
+# OPCIONAL: roda o monitor de graça na nuvem (GitHub Actions), sem PC ligado.
+# Salve este arquivo dentro do seu repositório em:  .github/workflows/monitor.yml
+# Depois cadastre os Secrets TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID
+# (Settings > Secrets and variables > Actions > New repository secret).
+name: Monitor de Concursos
+
+on:
+  schedule:
+    - cron: "17 * * * *"      # a cada hora, no minuto 17 (horário UTC)
+  workflow_dispatch:           # permite rodar manualmente pelo botão "Run workflow"
+
+permissions:
+  contents: write              # necessário para salvar o estado_visto.json
+
+concurrency:
+  group: monitor-concursos
+  cancel-in-progress: false
+
+jobs:
+  rodar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Varredura
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python concursos_monitor.py --uma-vez
+
+      - name: Salvar memória (para não repetir avisos)
+        run: |
+          git config user.name  "monitor-bot"
+          git config user.email "monitor-bot@users.noreply.github.com"
+          git add estado_visto.json || true
+          git diff --cached --quiet || (git commit -m "atualiza estado" && git push)
